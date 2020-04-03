@@ -17,9 +17,7 @@ import cz.covid19cz.erouska.bt.BluetoothRepository
 import cz.covid19cz.erouska.db.SharedPrefsRepository
 import cz.covid19cz.erouska.ext.execute
 import cz.covid19cz.erouska.ext.isLocationEnabled
-import cz.covid19cz.erouska.receiver.BatterSaverStateReceiver
-import cz.covid19cz.erouska.receiver.BluetoothStateReceiver
-import cz.covid19cz.erouska.receiver.LocationStateReceiver
+import cz.covid19cz.erouska.receiver.*
 import cz.covid19cz.erouska.ui.notifications.CovidNotificationManager
 import cz.covid19cz.erouska.utils.BatteryOptimization
 import cz.covid19cz.erouska.utils.L
@@ -89,6 +87,12 @@ class CovidService : Service() {
             return serviceIntent
         }
 
+        fun scan(c: Context): Intent {
+            val serviceIntent = Intent(c, CovidService::class.java)
+            serviceIntent.action = ACTION_RESUME
+            return serviceIntent
+        }
+
         fun isRunning(context: Context): Boolean {
             val manager =
                 context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager?
@@ -104,6 +108,7 @@ class CovidService : Service() {
     private val locationStateReceiver by inject<LocationStateReceiver>()
     private val bluetoothStateReceiver by inject<BluetoothStateReceiver>()
     private val batterySaverStateReceiver by inject<BatterSaverStateReceiver>()
+    private val iOSBtReceiver by inject<IOSScanReceiver>()
     private val btUtils by inject<BluetoothRepository>()
     private val prefs by inject<SharedPrefsRepository>()
     private val wakeLockManager by inject<WakeLockManager>()
@@ -151,7 +156,7 @@ class CovidService : Service() {
 
     private fun start() {
         resume()
-        wakeLockManager.acquire()
+//        wakeLockManager.acquire()
     }
 
     private fun resume() {
@@ -162,7 +167,7 @@ class CovidService : Service() {
     }
 
     private fun stop(intent: Intent) {
-        wakeLockManager.release()
+//        wakeLockManager.release()
         servicePaused = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_DETACH)
@@ -245,6 +250,9 @@ class CovidService : Service() {
 
         val batterySaverFilter = IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
         registerReceiver(batterySaverStateReceiver, batterySaverFilter)
+
+        val iosBtreceiver = IntentFilter(BtScanReceiver.ACTION_IOS)
+        registerReceiver(iOSBtReceiver, iosBtreceiver)
     }
 
     private fun unsubscribeFromReceivers() {

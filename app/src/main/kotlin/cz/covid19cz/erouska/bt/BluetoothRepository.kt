@@ -1,10 +1,12 @@
 package cz.covid19cz.erouska.bt
 
+import android.app.PendingIntent
 import android.bluetooth.*
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.ParcelUuid
 import androidx.databinding.ObservableArrayList
@@ -13,11 +15,16 @@ import cz.covid19cz.erouska.bt.entity.ScanSession
 import cz.covid19cz.erouska.db.DatabaseRepository
 import cz.covid19cz.erouska.db.ScanDataEntity
 import cz.covid19cz.erouska.db.SharedPrefsRepository
-import cz.covid19cz.erouska.ext.*
+import cz.covid19cz.erouska.ext.asHexLower
+import cz.covid19cz.erouska.ext.execute
+import cz.covid19cz.erouska.ext.hexAsByteArray
+import cz.covid19cz.erouska.ext.hoursToMilis
+import cz.covid19cz.erouska.receiver.BtScanReceiver
 import cz.covid19cz.erouska.utils.L
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import no.nordicsemi.android.support.v18.scanner.*
+import no.nordicsemi.android.support.v18.scanner.ScanSettings.MATCH_MODE_STICKY
 import java.util.*
 import kotlin.collections.HashMap
 
@@ -35,6 +42,8 @@ class BluetoothRepository(
         const val APPLE_MANUFACTURER_ID = 76
     }
 
+    private var iosPendingIntent: PendingIntent? = null
+    private var androidPendingIntent: PendingIntent? = null
     private val scanResultsMap = HashMap<String, ScanSession>()
     private var discoveredIosDevices: MutableMap<String, ScanSession> = mutableMapOf()
     val scanResultsList = ObservableArrayList<ScanSession>()
@@ -44,7 +53,7 @@ class BluetoothRepository(
 
     private var gattFailDisposable: Disposable? = null
 
-    private val scanCallback = object : ScanCallback() {
+    val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             onScanResult(result)
         }
@@ -61,7 +70,7 @@ class BluetoothRepository(
         }
     }
 
-    private val scanIosOnBackgroundCallback = object : ScanCallback() {
+    val scanIosOnBackgroundCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             onScanIosOnBackgroundResult(result)
         }
@@ -167,20 +176,37 @@ class BluetoothRepository(
             .setLegacy(true)
             .setScanMode(AppConfig.scanMode)
             .setUseHardwareFilteringIfSupported(true)
+            .setUseHardwareBatchingIfSupported(true)
+            .setMatchMode(MATCH_MODE_STICKY)
+            .setReportDelay(15000)
             .build()
 
         val iOSScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(false)
             .setScanMode(AppConfig.scanMode)
             .setUseHardwareFilteringIfSupported(true)
+            .setUseHardwareBatchingIfSupported(true)
+            .setReportDelay(15000)
+            .setMatchMode(MATCH_MODE_STICKY)
             .build()
+
+        val androidIntent = Intent(context, BtScanReceiver::class.java)
+        androidIntent.action = BtScanReceiver.ACTION_ANDROID
+        androidPendingIntent =
+            PendingIntent.getBroadcast(context, 1, androidIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+
+        val iosIntent = Intent(context, BtScanReceiver::class.java)
+        iosIntent.action = BtScanReceiver.ACTION_IOS
+        iosPendingIntent =
+            PendingIntent.getBroadcast(context, 2, iosIntent, PendingIntent.FLAG_UPDATE_CURRENT)
 
         BluetoothLeScannerCompat.getScanner().startScan(
             listOf(
                 ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
             ),
             androidScannerSettings,
-            scanCallback
+            context,
+            androidPendingIntent!!
         )
 
         BluetoothLeScannerCompat.getScanner().startScan(
@@ -190,7 +216,8 @@ class BluetoothRepository(
                     .build()
             ),
             iOSScannerSettings,
-            scanIosOnBackgroundCallback
+            context,
+            iosPendingIntent!!
         )
         isScanning = true
     }
@@ -199,8 +226,9 @@ class BluetoothRepository(
         L.d("Stopping BLE scanning")
         if (btManager.isBluetoothEnabled()) {
             isScanning = false
-            BluetoothLeScannerCompat.getScanner().stopScan(scanCallback)
-            BluetoothLeScannerCompat.getScanner().stopScan(scanIosOnBackgroundCallback)
+            iosPendingIntent?.let { BluetoothLeScannerCompat.getScanner().stopScan(context, it) }
+            androidPendingIntent?.let { BluetoothLeScannerCompat.getScanner().stopScan(context, it) }
+
         }
         saveDataAndClearScanResults()
         gattFailDisposable?.dispose()
@@ -209,24 +237,26 @@ class BluetoothRepository(
     private fun saveDataAndClearScanResults() {
         L.d("Saving data to database")
         Observable.just(scanResultsMap.values.toTypedArray())
-            .map { tempArray ->
-                for (item in tempArray) {
-                    item.calculate()
-                    val scanResult = ScanDataEntity(
-                        0,
-                        item.deviceId,
-                        item.timestampStart,
-                        item.timestampEnd,
-                        item.avgRssi,
-                        item.medRssi,
-                        item.rssiCount
-                    )
-                    L.d("Saving: $scanResult")
-
-                    db.add(scanResult)
-                }
+            .map {
+                it.map { scanSession -> scanSession.fold(1000 * 120) }.flatten()
+                    .forEach { item ->
+                        with (item) {
+                            calculate()
+                            val scanResult = ScanDataEntity(
+                                0,
+                                deviceId,
+                                timestampStart,
+                                timestampEnd,
+                                avgRssi,
+                                medRssi,
+                                rssiCount
+                            )
+                            L.d("Saving: $scanResult")
+                            db.add(scanResult)
+                        }
+                    }
                 dbCleanup()
-                tempArray.size
+                it.size
             }.execute({
                 L.d("$it records saved")
                 clearScanResults()
@@ -236,7 +266,7 @@ class BluetoothRepository(
     private fun onScanResult(result: ScanResult) {
         result.scanRecord?.bytes?.let { bytes ->
             if (isServiceUUIDMatch(result) || canBeIosOnBackground(result.scanRecord)) {
-                val deviceId = getTuidFromAdvertising(bytes)
+                val deviceId = getBuidFromAdvertising(result.scanRecord!!)
                 if (deviceId != null) {
                     // It's time to handle Android Device
                     handleAndroidDevice(result, deviceId)
@@ -278,7 +308,7 @@ class BluetoothRepository(
 
     private fun handleAndroidDevice(result: ScanResult, deviceId: String) {
         if (!scanResultsMap.containsKey(deviceId)) {
-            val newEntity = ScanSession(deviceId, result.device.address)
+            val newEntity = ObservableScanSession(deviceId, result.device.address)
             newEntity.addRssi(result.rssi)
             scanResultsList.add(newEntity)
             scanResultsMap[deviceId] = newEntity
@@ -317,7 +347,7 @@ class BluetoothRepository(
 
     private fun registerIOSDevice(result: ScanResult) {
         val mac = result.device.address
-        val session = ScanSession(mac = mac)
+        val session = ObservableScanSession(mac = mac)
         session.addRssi(result.rssi)
         discoveredIosDevices[mac] = session
         scanResultsList.add(session)
@@ -340,39 +370,11 @@ class BluetoothRepository(
         gatt.close()
     }
 
-    private fun getTuidFromAdvertising(bytes: ByteArray): String? {
-        val result = ByteArray(10)
-
-        var currIndex = 0
-        var len = -1
-        var type: Byte
-
-        while (currIndex < bytes.size && len != 0) {
-            len = bytes[currIndex].toInt()
-            type = bytes[currIndex + 1]
-
-            if (type == 0x21.toByte()) { //128 bit Service UUID (most cases)
-                // +2 (skip lenght byte and type byte), +16 (skip 128 bit Service UUID)
-                bytes.copyInto(result, 0, currIndex + 2 + 16, currIndex + 2 + 16 + 10)
-                break
-            } else if (type == 0x16.toByte()) { //16 bit Service UUID (rare cases)
-                // +2 (skip lenght byte and type byte), +2 (skip 16 bit Service UUID)
-                if (bytes.size > (currIndex + 2 + 2 + 10)) {
-                    bytes.copyInto(result, 0, currIndex + 2 + 2, currIndex + 2 + 2 + 10)
-                }
-                break
-            } else if (type == 0x20.toByte()) { //32 bit Service UUID (just in case)
-                // +2 (skip lenght byte and type byte), +4 (skip 32 bit Service UUID)
-                bytes.copyInto(result, 0, currIndex + 2 + 4, currIndex + 2 + 4 + 10)
-                break
-            } else {
-                currIndex += len + 1
-            }
+    private fun getBuidFromAdvertising(scanRecord: ScanRecord): String? {
+        scanRecord.serviceData?.apply {
+            return get(ParcelUuid(SERVICE_UUID))?.asHexLower ?: get(keys.first())?.asHexLower
         }
-
-        val resultHex = result.asHexLower
-
-        return if (resultHex != "00000000000000000000") resultHex else null
+        return null
     }
 
     fun clearScanResults() {

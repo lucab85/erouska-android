@@ -6,7 +6,7 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 
-class ScanSession(tuid: String = UNKNOWN_TUID, val mac: String) {
+open class ScanSession(tuid: String = UNKNOWN_TUID, val mac: String) {
 
     companion object{
         const val UNKNOWN_TUID = "UNKNOWN"
@@ -33,8 +33,11 @@ class ScanSession(tuid: String = UNKNOWN_TUID, val mac: String) {
         get() = rssiList.size
     var gattAttemptTimestamp: Long = 0
 
-    fun addRssi(rssiVal: Int) {
-        val rssi = Rssi(rssiVal)
+    open fun addRssi(rssiVal: Int) {
+        rssiList.add(Rssi(rssiVal))
+    }
+
+    private fun addRssi(rssi: Rssi) {
         rssiList.add(rssi)
         currRssi.postValue(rssiVal)
         lastGattAttempt.postValue(lastGattAttemptAsString())
@@ -86,4 +89,29 @@ class ScanSession(tuid: String = UNKNOWN_TUID, val mac: String) {
         }
     }
 
+
+    fun fold(interval: Long): List<ScanSession> {
+        return rssiList.toList().fold(mutableListOf()) { acc, item ->
+            acc.lastOrNull()?.apply {
+                if (item.timestamp - timestampStart < interval) {
+                    addRssi(item)
+                }
+            } ?: run {
+                ScanSession(deviceId, mac).apply {
+                    acc.add(this)
+                    addRssi(item)
+                }
+            }
+            acc
+        }
+    }
+}
+
+class ObservableScanSession(deviceId: String = UNKNOWN_TUID, mac: String): ScanSession(deviceId, mac) {
+    val currRssi = SafeMutableLiveData(Int.MAX_VALUE)
+
+    override fun addRssi(rssiVal: Int) {
+        super.addRssi(rssiVal)
+        currRssi.postValue(rssiVal)
+    }
 }
