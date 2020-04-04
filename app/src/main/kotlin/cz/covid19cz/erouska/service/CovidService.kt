@@ -23,9 +23,11 @@ import cz.covid19cz.erouska.receiver.LocationStateReceiver
 import cz.covid19cz.erouska.ui.notifications.CovidNotificationManager
 import cz.covid19cz.erouska.utils.BatteryOptimization
 import cz.covid19cz.erouska.utils.L
+import cz.covid19cz.erouska.utils.Telemetry
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import org.koin.android.ext.android.inject
+import java.util.*
 import java.util.concurrent.TimeUnit
 
 
@@ -43,6 +45,9 @@ class CovidService : Service() {
 
         const val EXTRA_HIDE_NOTIFICATION = "HIDE_NOTIFICATION"
         const val EXTRA_CLEAR_DATA = "CLEAR_DATA"
+
+        private val SERVICE_ID = UUID.randomUUID().toString()
+        private val SERVICE_NAME = CovidService::class.java.simpleName
 
         fun startService(c: Context): Intent {
             val serviceIntent = Intent(c, CovidService::class.java)
@@ -90,6 +95,7 @@ class CovidService : Service() {
             }
             return false
         }
+
     }
 
     private val locationStateReceiver by inject<LocationStateReceiver>()
@@ -100,6 +106,7 @@ class CovidService : Service() {
     private val wakeLockManager by inject<WakeLockManager>()
     private val powerManager by inject<PowerManager>()
     private val localBroadcastManager by inject<LocalBroadcastManager>()
+    private val telemetry by inject<Telemetry>()
     private val notificationManager = CovidNotificationManager(this)
 
     private var bleAdvertisingDisposable: Disposable? = null
@@ -112,9 +119,12 @@ class CovidService : Service() {
         super.onCreate()
         deviceBuid = prefs.getDeviceBuid() ?: "00000000000000000000"
         subscribeToReceivers()
+        telemetry.trackServiceCreated(SERVICE_NAME, SERVICE_ID)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        telemetry.trackIntentReceived(SERVICE_NAME, SERVICE_ID, intent)
+
         when (intent?.action) {
             // null intent is in case service is restarted by system
             ACTION_START, null -> start()
@@ -177,6 +187,8 @@ class CovidService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
+        telemetry.trackServiceTaskRemoved(SERVICE_NAME, SERVICE_ID)
+
         if (BatteryOptimization.isMiUI()) {
             ContextCompat.startForegroundService(this, Companion.startService(this))
         }
@@ -186,6 +198,7 @@ class CovidService : Service() {
         wakeLockManager.release()
         turnMaskOff()
         unsubscribeFromReceivers()
+        telemetry.trackServiceDestroyed(SERVICE_NAME, SERVICE_ID)
 
         super.onDestroy()
     }
