@@ -113,7 +113,7 @@ class CovidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        deviceBuid = prefs.getDeviceBuid() ?: "00000000000000000000"
+        deviceBuid = prefs.getDeviceBuidRandom() ?: "00000000000000000000"
         subscribeToReceivers()
     }
 

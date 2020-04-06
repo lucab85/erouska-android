@@ -195,6 +195,7 @@ class LoginVM(
                 functions.getHttpsCallable("registerBuid").call(data).addOnSuccessListener {
                     val buid = JSONObject(it.data.toString()).getString("buid")
                     sharedPrefsRepository.putDeviceBuid(buid)
+                    sharedPrefsRepository.putDeviceBuid2(buid)
                     getUser()
                 }.addOnFailureListener {
                     handleError(it)
