@@ -3,13 +3,13 @@ package cz.covid19cz.erouska.db
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
-import cz.covid19cz.erouska.utils.L
 
 class SharedPrefsRepository(c : Context) {
 
     companion object{
         const val DEVICE_BUID = "DEVICE_BUID"
-        const val DEVICE_BUID_SET = "DEVICE_BUID_SET"
+        const val DEVICE_TUIDS = "DEVICE_TUIDS"
+        const val CURRENT_TUID = "CURRENT_TUID"
         const val APP_PAUSED = "preference.app_paused"
         const val LAST_UPLOAD_TIMESTAMP = "preference.last_upload_timestamp"
         const val LAST_DB_CLEANUP_TIMESTAMP = "preference.last_db_cleanup_timestamp"
@@ -21,12 +21,8 @@ class SharedPrefsRepository(c : Context) {
         prefs.edit().putString(DEVICE_BUID, buid).apply()
     }
 
-    fun putDeviceBuid2(buid : String){
-        val mutableSetOf = mutableSetOf<String>()
-        for (i in 1..100000) {
-            mutableSetOf.add(buid+i)
-        }
-        prefs.edit().putStringSet(DEVICE_BUID_SET, mutableSetOf).apply()
+    fun putDeviceTuids(tuids : List<String>){
+        prefs.edit().putStringSet(DEVICE_TUIDS, tuids.toSet()).apply()
     }
 
     fun removeDeviceBuid(){
@@ -34,19 +30,30 @@ class SharedPrefsRepository(c : Context) {
     }
 
     fun getDeviceBuid() : String?{
-        val start = System.currentTimeMillis()
-        val buid = prefs.getString(DEVICE_BUID, null)
-        L.d("Buid Performance: ${System.currentTimeMillis() - start}")
-        return buid
+        return prefs.getString(DEVICE_BUID, null)
     }
 
-    fun getDeviceBuidRandom() : String?{
-        val start = System.currentTimeMillis()
-        val stringSet = prefs.getStringSet(DEVICE_BUID_SET, emptySet())
-        val buid=  stringSet?.random()
-        L.d("Buid Performance Set: ${System.currentTimeMillis() - start} ${stringSet?.size}")
-        return buid
+    /**
+     * Returns random element from the list of tuids.
+     * It has an optional parameter which can be used to make sure that no two tuids will be used
+     * twice in a row.
+     */
+    fun getRandomTuid(lastTuid: String? = null) : String?{
+        val stringSet = prefs.getStringSet(DEVICE_TUIDS, emptySet())
+        return stringSet?.let {
+            if (it.size > 1) { // make sure we don't loop in here forever
+                it.random()?.run {
+                    if (this == lastTuid) getRandomTuid(lastTuid) else this
+                }
+            } else {
+                it.firstOrNull()
+            }
+        }
     }
+
+    fun getCurrentTuid() = prefs.getString(CURRENT_TUID, null)
+
+    fun setCurrentTuid(tuid: String) = prefs.edit().putString(CURRENT_TUID, tuid).apply()
 
     fun setAppPaused(appPaused: Boolean) {
         prefs.edit().putBoolean(APP_PAUSED, appPaused).apply()
