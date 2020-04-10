@@ -20,7 +20,7 @@ class WakeLockManager(private val powerManager: PowerManager?) {
         wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, tag)
         wakeLock?.let {
             if (!it.isHeld) {
-                it.acquire()
+//                it.acquire()
             }
         }
     }
@@ -28,7 +28,7 @@ class WakeLockManager(private val powerManager: PowerManager?) {
     fun release() {
         wakeLock?.let {
             if (it.isHeld) {
-                it.release()
+//                it.release()
             }
         }
     }
