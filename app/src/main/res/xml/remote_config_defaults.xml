@@ -108,4 +108,12 @@
         <key>showBatteryOptimizationTutorial</key>
         <value>true</value>
     </entry>
+    <entry>
+        <key>isImmediateUpdateOn</key>
+        <value>false</value>
+    </entry>
+    <entry>
+        <key>minSupportedVersionCode</key>
+        <value>0</value>
+    </entry>
 </defaultsMap>

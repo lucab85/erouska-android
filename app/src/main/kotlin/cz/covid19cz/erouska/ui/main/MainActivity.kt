@@ -1,8 +1,11 @@
 package cz.covid19cz.erouska.ui.main
 
+import android.R.id
+import android.app.Activity
 import android.content.*
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
 import android.view.View.GONE
 import android.view.View.VISIBLE
 import androidx.browser.customtabs.CustomTabsClient
@@ -14,7 +17,20 @@ import androidx.navigation.NavDestination
 import androidx.navigation.NavOptions
 import androidx.navigation.findNavController
 import androidx.navigation.ui.NavigationUI
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.play.core.appupdate.AppUpdateInfo
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.install.InstallState
+import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.android.play.core.install.model.ActivityResult
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
+import com.google.android.play.core.install.model.UpdateAvailability
+import cz.covid19cz.erouska.AppConfig
+import cz.covid19cz.erouska.BuildConfig
 import cz.covid19cz.erouska.R
+import cz.covid19cz.erouska.R.string
 import cz.covid19cz.erouska.bt.BluetoothRepository
 import cz.covid19cz.erouska.databinding.ActivityMainBinding
 import cz.covid19cz.erouska.ext.hasLocationPermission
@@ -26,7 +42,11 @@ import kotlinx.android.synthetic.main.activity_main.*
 import org.koin.android.ext.android.inject
 
 class MainActivity :
-    BaseActivity<ActivityMainBinding, MainVM>(R.layout.activity_main, MainVM::class) {
+    BaseActivity<ActivityMainBinding, MainVM>(R.layout.activity_main, MainVM::class), InstallStateUpdatedListener {
+
+    companion object {
+        private const val REQUEST_CODE_IMMEDIATE_UPDATE = 2000
+    }
 
     private val localBroadcastManager by inject<LocalBroadcastManager>()
     private val bluetoothRepository by inject<BluetoothRepository>()
@@ -55,6 +75,7 @@ class MainActivity :
             }
         }
     }
+    private lateinit var appUpdateManager: AppUpdateManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.AppTheme)
@@ -74,6 +95,18 @@ class MainActivity :
                 updateBottomNavigation(destination, arguments)
             }
         }
+
+        appUpdateManager = AppUpdateManagerFactory.create(this)
+        appUpdateManager.appUpdateInfo.addOnSuccessListener {
+            if (AppConfig.isImmediateUpdateOn &&
+                it.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                it.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) &&
+                BuildConfig.VERSION_CODE < AppConfig.minSupportedVersionCode &&
+                it.availableVersionCode() > BuildConfig.VERSION_CODE
+            ) {
+                requestUpdate(it)
+            }
+        }
         viewModel.serviceRunning.observe(this, Observer { isRunning ->
             ContextCompat.getColor(
                 this,
@@ -88,6 +121,7 @@ class MainActivity :
 
     override fun onDestroy() {
         localBroadcastManager.unregisterReceiver(serviceStateReceiver)
+        appUpdateManager.unregisterListener(this)
         super.onDestroy()
     }
 
@@ -135,6 +169,40 @@ class MainActivity :
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        appUpdateManager.appUpdateInfo.addOnSuccessListener {
+            if (it.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                appUpdateManager.startUpdateFlowForResult(
+                    it,
+                    AppUpdateType.IMMEDIATE,
+                    this,
+                    REQUEST_CODE_IMMEDIATE_UPDATE
+                )
+            }
+        }
+    }
+
+    override fun onStateUpdate(state: InstallState?) {
+        if (state?.installStatus() == InstallStatus.DOWNLOADED) {
+            notifyUserAboutUpdate()
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_IMMEDIATE_UPDATE) {
+            when (resultCode) {
+                Activity.RESULT_OK -> { //  handle user's approval
+                }
+                Activity.RESULT_CANCELED -> { //  handle user's rejection
+                }
+                ActivityResult.RESULT_IN_APP_UPDATE_FAILED -> { //  handle update failure
+                }
+            }
+        }
+    }
+
     private fun updateBottomNavigation(
         destination: NavDestination,
         arguments: Bundle?
@@ -162,6 +230,26 @@ class MainActivity :
 
     private fun passesRequirements(): Boolean {
         return bluetoothRepository.isBtEnabled() && isLocationEnabled() && hasLocationPermission()
+    }
+
+
+    private fun requestUpdate(appUpdateInfo: AppUpdateInfo?) {
+        appUpdateManager.startUpdateFlowForResult(
+            appUpdateInfo,
+            AppUpdateType.IMMEDIATE,
+            this,
+            REQUEST_CODE_IMMEDIATE_UPDATE
+        )
+    }
+
+    private fun notifyUserAboutUpdate() {
+        Snackbar
+            .make(findViewById<View>(id.content), string.restart_to_update, Snackbar.LENGTH_INDEFINITE)
+            .setAction(R.string.action_restart) {
+                appUpdateManager.completeUpdate()
+                appUpdateManager.unregisterListener(this)
+            }
+            .show()
     }
 
 }

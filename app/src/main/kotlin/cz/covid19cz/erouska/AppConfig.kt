@@ -70,6 +70,10 @@ object AppConfig {
         get() = firebaseRemoteConfig.getString("batteryOptimizationHuaweiMarkdown")
     val helpMarkdown
         get() = firebaseRemoteConfig.getString("helpMarkdown")
+    val isImmediateUpdateOn
+        get() = firebaseRemoteConfig.getBoolean("isImmediateUpdateOn")
+    val minSupportedVersionCode
+        get() = firebaseRemoteConfig.getLong("minSupportedVersionCode")
 
     var overrideAdvertiseTxPower : Int? = null
 
