@@ -19,7 +19,6 @@ open class ScanSession(tuid: String = UNKNOWN_TUID, val mac: String) {
         }
 
     private val rssiList = ArrayList<Rssi>()
-    val currRssi = SafeMutableLiveData(Int.MAX_VALUE)
     val lastGattAttempt = SafeMutableLiveData("")
     val observableDeviceId = SafeMutableLiveData(tuid)
 
@@ -39,7 +38,6 @@ open class ScanSession(tuid: String = UNKNOWN_TUID, val mac: String) {
 
     private fun addRssi(rssi: Rssi) {
         rssiList.add(rssi)
-        currRssi.postValue(rssiVal)
         lastGattAttempt.postValue(lastGattAttemptAsString())
     }
 

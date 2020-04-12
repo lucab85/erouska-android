@@ -11,14 +11,12 @@ import android.content.pm.PackageManager
 import android.os.ParcelUuid
 import androidx.databinding.ObservableArrayList
 import cz.covid19cz.erouska.AppConfig
+import cz.covid19cz.erouska.bt.entity.ObservableScanSession
 import cz.covid19cz.erouska.bt.entity.ScanSession
 import cz.covid19cz.erouska.db.DatabaseRepository
 import cz.covid19cz.erouska.db.ScanDataEntity
 import cz.covid19cz.erouska.db.SharedPrefsRepository
-import cz.covid19cz.erouska.ext.asHexLower
-import cz.covid19cz.erouska.ext.execute
-import cz.covid19cz.erouska.ext.hexAsByteArray
-import cz.covid19cz.erouska.ext.hoursToMilis
+import cz.covid19cz.erouska.ext.*
 import cz.covid19cz.erouska.receiver.BtScanReceiver
 import cz.covid19cz.erouska.utils.L
 import io.reactivex.Observable
