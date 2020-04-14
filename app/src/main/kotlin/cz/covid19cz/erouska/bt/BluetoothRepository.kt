@@ -166,12 +166,16 @@ class BluetoothRepository(
         val androidScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(true)
             .setScanMode(AppConfig.scanMode)
+            .setReportDelay(29 * 1000)
+            .setUseHardwareBatchingIfSupported(true)
             .setUseHardwareFilteringIfSupported(true)
             .build()
 
         val iOSScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(false)
             .setScanMode(AppConfig.scanMode)
+            .setReportDelay(29 * 1000)
+            .setUseHardwareBatchingIfSupported(true)
             .setUseHardwareFilteringIfSupported(true)
             .build()
 
