@@ -92,9 +92,7 @@ class BluetoothRepository(
     private val gattCallback = object : BluetoothGattCallback() {
 
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            val mac = gatt.device.address
-
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
+          if (newState == BluetoothProfile.STATE_CONNECTED) {
                 L.d("GATT connected. Mac: ${gatt.device.address}")
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
@@ -166,7 +164,7 @@ class BluetoothRepository(
         val androidScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(true)
             .setScanMode(AppConfig.scanMode)
-            .setReportDelay(29 * 1000)
+            .setReportDelay(14 * 1000)
             .setUseHardwareBatchingIfSupported(true)
             .setUseHardwareFilteringIfSupported(true)
             .build()
@@ -174,7 +172,7 @@ class BluetoothRepository(
         val iOSScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(false)
             .setScanMode(AppConfig.scanMode)
-            .setReportDelay(29 * 1000)
+            .setReportDelay(14 * 1000)
             .setUseHardwareBatchingIfSupported(true)
             .setUseHardwareFilteringIfSupported(true)
             .build()
@@ -238,9 +236,11 @@ class BluetoothRepository(
     }
 
     private fun onScanResult(result: ScanResult) {
-        result.scanRecord?.bytes?.let { bytes ->
-            if (isServiceUUIDMatch(result) || canBeIosOnBackground(result.scanRecord)) {
-                val deviceId = getTuidFromAdvertising(bytes)
+        result.scanRecord?.let { scanRecord ->
+            if (isServiceUUIDMatch(result) || canBeIosOnBackground(scanRecord)) {
+                val deviceId = scanRecord.bytes?.let {
+                    getTuidFromAdvertising(it)
+                }
                 if (deviceId != null) {
                     // It's time to handle Android Device
                     handleAndroidDevice(result, deviceId)
@@ -324,6 +324,7 @@ class BluetoothRepository(
         val session = ScanSession(mac = mac)
         session.addRssi(result.rssi)
         discoveredIosDevices[mac] = session
+        getTuidFromGatt(session)
         scanResultsList.add(session)
     }
 
@@ -419,7 +420,7 @@ class BluetoothRepository(
             .setTxPowerLevel(power)
             .build()
 
-        val parcelUuid = ParcelUuid(SERVICE_UUID)
+        val parcelUuid = ParcelUuid(UUID.fromString(tuid))
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
             .addServiceUuid(parcelUuid)
