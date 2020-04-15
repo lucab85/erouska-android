@@ -239,7 +239,7 @@ class BluetoothRepository(
         result.scanRecord?.let { scanRecord ->
             if (isServiceUUIDMatch(result) || canBeIosOnBackground(scanRecord)) {
                 val deviceId = scanRecord.bytes?.let {
-                    getTuidFromAdvertising(it)
+                    getTuidFromAdvertising(scanRecord)
                 }
                 if (deviceId != null) {
                     // It's time to handle Android Device
@@ -345,7 +345,10 @@ class BluetoothRepository(
         gatt.close()
     }
 
-    private fun getTuidFromAdvertising(bytes: ByteArray): String? {
+    private fun getTuidFromAdvertising(scanRecord: ScanRecord): String? {
+
+        val tuid = scanRecord.serviceData?.get(ParcelUuid(SERVICE_UUID))?.asHexLower
+        val bytes = scanRecord.bytes!!
         val result = ByteArray(10)
 
         var currIndex = 0
@@ -420,7 +423,7 @@ class BluetoothRepository(
             .setTxPowerLevel(power)
             .build()
 
-        val parcelUuid = ParcelUuid(UUID.fromString(tuid))
+        val parcelUuid = ParcelUuid(SERVICE_UUID)
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
             .addServiceUuid(parcelUuid)

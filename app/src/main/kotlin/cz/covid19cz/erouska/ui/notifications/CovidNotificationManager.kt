@@ -1,5 +1,6 @@
 package cz.covid19cz.erouska.ui.notifications
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -118,6 +119,7 @@ class CovidNotificationManager(private val service: CovidService) {
                 .setColor(ContextCompat.getColor(this, color))
                 .setContentIntent(notificationPendingIntent)
                 .setOngoing(!serviceStatus.paused)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
                 .build()
                 .run {
                     if (serviceStatus.paused) {
