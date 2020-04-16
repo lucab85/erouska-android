@@ -290,7 +290,7 @@ class CovidService : Service() {
                     bleAdvertisingDisposable?.dispose()
                 }
             }
-            .delay(AppConfig.advertiseRestartMinutes, TimeUnit.MINUTES)
+            .delay(4, TimeUnit.MINUTES)
             .doOnNext { btUtils.stopAdvertising() }
             .repeat()
             .execute(

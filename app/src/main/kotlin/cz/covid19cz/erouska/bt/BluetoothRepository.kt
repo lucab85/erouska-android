@@ -165,13 +165,15 @@ class BluetoothRepository(
 
         val androidScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(true)
-            .setScanMode(AppConfig.scanMode)
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+            .setPowerSave(15 * 1000, 15 * 1000)
             .setUseHardwareFilteringIfSupported(true)
             .build()
 
         val iOSScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(false)
-            .setScanMode(AppConfig.scanMode)
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+            .setPowerSave(15 * 1000, 15 * 1000)
             .setUseHardwareFilteringIfSupported(true)
             .build()
 
@@ -409,9 +411,9 @@ class BluetoothRepository(
         L.d("Starting BLE advertising with power $power")
 
         val settings = AdvertiseSettings.Builder()
-            .setAdvertiseMode(AppConfig.advertiseMode)
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
             .setConnectable(true)
-            .setTimeout(0)
+            .setTimeout(1000 * 60 * 2)
             .setTxPowerLevel(power)
             .build()
 
