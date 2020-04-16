@@ -1,6 +1,9 @@
 package cz.covid19cz.erouska.service
 
 import android.app.ActivityManager
+import android.app.AlarmManager
+import android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP
+import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
@@ -10,6 +13,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import cz.covid19cz.erouska.AppConfig
@@ -23,6 +27,7 @@ import cz.covid19cz.erouska.receiver.BluetoothStateReceiver
 import cz.covid19cz.erouska.receiver.LocationStateReceiver
 import cz.covid19cz.erouska.ui.main.ShortcutsManager
 import cz.covid19cz.erouska.ui.notifications.CovidNotificationManager
+import cz.covid19cz.erouska.ui.notifications.wrapAsForegroundService
 import cz.covid19cz.erouska.utils.BatteryOptimization
 import cz.covid19cz.erouska.utils.L
 import io.reactivex.Observable
@@ -105,6 +110,7 @@ class CovidService : Service() {
         }
     }
 
+    private lateinit var alarmPendingIntent: PendingIntent
     private val locationStateReceiver by inject<LocationStateReceiver>()
     private val bluetoothStateReceiver by inject<BluetoothStateReceiver>()
     private val batterySaverStateReceiver by inject<BatterSaverStateReceiver>()
@@ -114,6 +120,7 @@ class CovidService : Service() {
     private val powerManager by inject<PowerManager>()
     private val localBroadcastManager by inject<LocalBroadcastManager>()
     private val notificationManager = CovidNotificationManager(this)
+    private val alarmManager by inject<AlarmManager>()
     private val shortcutsManager = ShortcutsManager(this)
 
     private var bleAdvertisingDisposable: Disposable? = null
@@ -123,6 +130,7 @@ class CovidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        alarmPendingIntent = startService(this).wrapAsForegroundService(this)
         subscribeToReceivers()
         updateAppShortcuts()
     }
@@ -142,6 +150,7 @@ class CovidService : Service() {
     private fun pause() {
         servicePaused = true
         prefs.setAppPaused(true)
+        alarmManager.cancel(alarmPendingIntent)
         createNotification()
         turnMaskOff()
         updateAppShortcuts()
@@ -159,6 +168,11 @@ class CovidService : Service() {
     private fun start() {
         resume()
         wakeLockManager.acquire()
+        alarmManager.set(
+            ELAPSED_REALTIME_WAKEUP,
+            SystemClock.elapsedRealtime() + 1000 * 60 * 10,
+            alarmPendingIntent
+        )
     }
 
     private fun resume() {
@@ -172,6 +186,7 @@ class CovidService : Service() {
     private fun stop(intent: Intent) {
         wakeLockManager.release()
         servicePaused = true
+        alarmManager.cancel(alarmPendingIntent)
         updateAppShortcuts()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
