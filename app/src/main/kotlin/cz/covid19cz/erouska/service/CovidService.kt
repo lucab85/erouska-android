@@ -17,6 +17,7 @@ import cz.covid19cz.erouska.bt.BluetoothRepository
 import cz.covid19cz.erouska.db.SharedPrefsRepository
 import cz.covid19cz.erouska.ext.batterySaverRestrictsLocation
 import cz.covid19cz.erouska.ext.execute
+import cz.covid19cz.erouska.ext.hasLocationPermission
 import cz.covid19cz.erouska.ext.isLocationEnabled
 import cz.covid19cz.erouska.receiver.BatterSaverStateReceiver
 import cz.covid19cz.erouska.receiver.BluetoothStateReceiver
@@ -210,7 +211,7 @@ class CovidService : Service() {
     }
 
     private fun turnMaskOn() {
-        if (isLocationEnabled() && btUtils.isBtEnabled()) {
+        if (hasLocationPermission() && isLocationEnabled() && btUtils.isBtEnabled()) {
             wakeLockManager.acquire()
             localBroadcastManager.sendBroadcast(Intent(ACTION_MASK_STARTED))
             startBleAdvertising()
@@ -237,6 +238,7 @@ class CovidService : Service() {
             CovidNotificationManager.ServiceStatus(
                 servicePaused,
                 btUtils.isBtEnabled(),
+                hasLocationPermission(),
                 isLocationEnabled(),
                 powerManager.batterySaverRestrictsLocation()
             )

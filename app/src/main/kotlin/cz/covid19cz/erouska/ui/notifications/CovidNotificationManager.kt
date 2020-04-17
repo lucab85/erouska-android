@@ -89,6 +89,15 @@ class CovidNotificationManager(private val service: CovidService) {
                 actionIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).wrapAsActivity()
                 actionText = R.string.notification_action_enable_bluetooth
             }
+            !serviceStatus.hasLocationPermission -> {
+                builder.setChannelId(ALERT_CHANNEL_ID)
+                title = R.string.notification_title_error
+                text = R.string.permission_rationale_title
+                icon = R.drawable.ic_notification_error
+                color = R.color.red
+                actionIntent = notificationIntent.wrapAsActivity()
+                actionText = R.string.enable
+            }
             !serviceStatus.locationEnabled -> {
                 builder.setChannelId(ALERT_CHANNEL_ID)
                 title = R.string.notification_title_error
@@ -159,6 +168,7 @@ class CovidNotificationManager(private val service: CovidService) {
     data class ServiceStatus(
         val paused: Boolean,
         val bluetoothEnabled: Boolean,
+        val hasLocationPermission: Boolean,
         val locationEnabled: Boolean,
         val batterySaverEnabled: Boolean
     ) {
