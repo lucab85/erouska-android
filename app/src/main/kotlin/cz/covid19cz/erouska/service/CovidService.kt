@@ -170,7 +170,7 @@ class CovidService : Service() {
         wakeLockManager.acquire()
         alarmManager.set(
             ELAPSED_REALTIME_WAKEUP,
-            SystemClock.elapsedRealtime() + 1000 * 60 * 10,
+            SystemClock.elapsedRealtime() + 1000 * 60 * 30,
             alarmPendingIntent
         )
     }

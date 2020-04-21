@@ -7,8 +7,10 @@ import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.ParcelUuid
+import android.os.SystemClock
 import androidx.databinding.ObservableArrayList
 import cz.covid19cz.erouska.AppConfig
+import cz.covid19cz.erouska.bt.entity.ObservableScanSession
 import cz.covid19cz.erouska.bt.entity.ScanSession
 import cz.covid19cz.erouska.db.DatabaseRepository
 import cz.covid19cz.erouska.db.ScanDataEntity
@@ -18,6 +20,7 @@ import cz.covid19cz.erouska.utils.L
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import no.nordicsemi.android.support.v18.scanner.*
+import no.nordicsemi.android.support.v18.scanner.ScanSettings.MATCH_MODE_AGGRESSIVE
 import java.util.*
 import kotlin.collections.HashMap
 
@@ -146,7 +149,7 @@ class BluetoothRepository(
         val androidScannerSettings: ScanSettings = ScanSettings.Builder()
             .setLegacy(false)
             .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
-            .setUseHardwareFilteringIfSupported(true)
+            .setMatchMode(MATCH_MODE_AGGRESSIVE)
             .build()
 
         BluetoothLeScannerCompat.getScanner().startScan(
@@ -175,9 +178,11 @@ class BluetoothRepository(
 
     private fun saveDataAndClearScanResults() {
         L.d("Saving data to database")
-        Observable.just(scanResultsMap.values.toTypedArray())
-            .map { tempArray ->
-                for (item in tempArray) {
+        Observable.just(scanResultsMap.values)
+            .flatMapIterable { it }
+            .map { it.fold(120 * 1000) }
+            .map { sessions ->
+                for (item in sessions) {
                     item.calculate()
                     val scanResult = ScanDataEntity(
                         0,
@@ -193,7 +198,7 @@ class BluetoothRepository(
                     db.add(scanResult)
                 }
                 dbCleanup()
-                tempArray.size
+                sessions.size
             }.execute({
                 L.d("$it records saved")
                 clearScanResults()
@@ -247,15 +252,15 @@ class BluetoothRepository(
 
     private fun handleAndroidDevice(result: ScanResult, deviceId: String) {
         if (!scanResultsMap.containsKey(deviceId)) {
-            val newEntity = ScanSession(deviceId, result.device.address)
-            newEntity.addRssi(result.rssi)
+            val newEntity = ObservableScanSession(deviceId, result.device.address)
+            newEntity.addRssi(result.rssi, result.absoluteTimestampMillis())
             scanResultsList.add(newEntity)
             scanResultsMap[deviceId] = newEntity
             L.d("Found new Android device: $deviceId")
         }
 
         scanResultsMap[deviceId]?.let { entity ->
-            entity.addRssi(result.rssi)
+            entity.addRssi(result.rssi, result.absoluteTimestampMillis())
             L.d("Device (Android) $deviceId - RSSI ${result.rssi}")
         }
     }
@@ -277,7 +282,7 @@ class BluetoothRepository(
                         scanResultsList.add(it)
                     }
                 }
-                it.addRssi(result.rssi)
+                it.addRssi(result.rssi, result.absoluteTimestampMillis())
                 L.d("Device (iOS) ${it.deviceId} - RSSI ${result.rssi}")
             }
             return
@@ -286,8 +291,8 @@ class BluetoothRepository(
 
     private fun registerIOSDevice(result: ScanResult) {
         val mac = result.device.address
-        val session = ScanSession(mac = mac)
-        session.addRssi(result.rssi)
+        val session = ObservableScanSession(mac = mac)
+        session.addRssi(result.rssi, result.absoluteTimestampMillis())
         discoveredIosDevices[mac] = session
         getTuidFromGatt(session)
         scanResultsList.add(session)
@@ -420,6 +425,10 @@ class BluetoothRepository(
             L.d("$rows records deleted")
             prefs.saveLastDbCleanupTimestamp(System.currentTimeMillis())
         }
+    }
+
+    fun ScanResult.absoluteTimestampMillis(): Long {
+        return System.currentTimeMillis() - (SystemClock.elapsedRealtimeNanos() - this.timestampNanos) / 1000000
     }
 
     data class GattConnectionQueueEntry(val macAddress: String, var isRunning: Boolean = false)
