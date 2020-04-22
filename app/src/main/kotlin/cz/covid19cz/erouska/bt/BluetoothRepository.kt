@@ -180,7 +180,7 @@ class BluetoothRepository(
         L.d("Saving data to database")
         Observable.just(scanResultsMap.values)
             .flatMapIterable { it }
-            .map { it.fold(120 * 1000) }
+            .map { it.fold(AppConfig.collectionSeconds * 1000) }
             .map { sessions ->
                 for (item in sessions) {
                     item.calculate()

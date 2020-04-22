@@ -1,4 +1,4 @@
-package cz.covid19cz.erouska.service
+    package cz.covid19cz.erouska.service
 
 import android.app.ActivityManager
 import android.app.AlarmManager
@@ -289,10 +289,12 @@ class CovidService : Service() {
                 }
             }
             .delay(AppConfig.collectionSeconds, TimeUnit.SECONDS)
+            .throttleFirst(AppConfig.collectionSeconds, TimeUnit.SECONDS)
             .doOnNext {
                 btUtils.stopScanning()
             }
             .delay(AppConfig.waitingSeconds, TimeUnit.SECONDS)
+            .throttleFirst(AppConfig.waitingSeconds, TimeUnit.SECONDS)
             .repeat()
             .execute(
                 { L.d("Restarting BLE scanning") },
